@@ -1,0 +1,11 @@
+# Core framework
+fastapi
+uvicorn
+requests
+fuzzywuzzy
+python-Levenshtein
+re2
+starlette
+pydantic
+pydantic-settings
+python-dotenv
