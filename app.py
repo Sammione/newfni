@@ -38,12 +38,14 @@ def fetch_faqs(token: str):
         return None
 
 
+#  Improved fuzzy and partial matching
 def search_faqs(query, faq_data):
     results = []
     if not faq_data or "data" not in faq_data:
         return results
 
-    query = query.lower().strip()
+    # Tokenize the query for partial matching
+    query_tokens = query.lower().split()
     faq_items = faq_data["data"].get("result", [])
 
     for item in faq_items:
@@ -58,9 +60,10 @@ def search_faqs(query, faq_data):
             document_type = fn.get("documentTypeName", doc_type).lower()
             submitted_by = fn.get("submittedByUserName", "Unknown User")
 
-            if query in question or query in clause or query in document_type:
+         
+            if any(token in question or token in clause or token in document_type for token in query_tokens):
                 results.append({
-                    "question": question,
+                    "question": fn.get("question"),
                     "answer": response,
                     "clause": clause,
                     "documentType": document_type,
@@ -70,6 +73,7 @@ def search_faqs(query, faq_data):
     return results
 
 
+#  Greeting check
 def is_greeting(text):
     greetings = [
         "hi", "hello", "hey", "good morning", "good afternoon",
@@ -79,32 +83,32 @@ def is_greeting(text):
     return any(word in text for word in greetings)
 
 
+#  Detect fuzzy-style queries
 def contains_fuzzy_command(text):
     fuzzy_keywords = [
         "show", "show me", "show me all", "display", "find", "fetch", "list", "list all",
         "search", "search for", "view", "tell me", "tell me about", "give me", "can you show",
         "fni", "issue", "issues", "negotiated issue", "negotiated issues", "negotiated",
-        "about", "on", "in", "for", "the", "on the",
+        "about", "on", "in", "for", "the", "on the", "Give me FNI for",
         "clause", "clauses", "clause title", "document", "document type", "client"
     ]
     text = text.lower()
     return any(keyword in text for keyword in fuzzy_keywords)
 
 
+# Improved fuzzy cleaner (only removes leading commands)
 def clean_fuzzy_query(text):
     text = text.lower()
-    fuzzy_patterns = [
-        r"\b(show|show me|show me all|list|list all|display|find|fetch|tell me|tell me about|give me|search|search for|can you show)\b",
-        r"\b(fni|issue|issues|negotiated issue|negotiated issues|negotiated)\b",
-        r"\b(about|on|in|for|the|on the)\b",
-        r"\b(clause|clauses|clause title|document|document type|client)\b"
+    patterns = [
+        r"^(show|show me|Give me FNI for|list|list all|display|find|fetch|tell me|tell me about|give me|search|search for|give me|can you show)\s+"
     ]
-    for pattern in fuzzy_patterns:
+    for pattern in patterns:
         text = re.sub(pattern, "", text, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\s+", " ", text).strip()
-    return cleaned if cleaned else text.strip()
+    # Remove extra spaces
+    return re.sub(r"\s+", " ", text).strip()
 
 
+# Welcome message builder
 def intro_message(faq_data):
     clause_names = [item.get("name", "") for item in faq_data["data"]["result"] if item.get("name")]
     doc_names = [item.get("documentTypeName", "") for item in faq_data["data"]["result"] if item.get("documentTypeName")]
@@ -116,7 +120,7 @@ def intro_message(faq_data):
 
     return {
         "welcome": {
-            "title": "Hi, I’m LUAN — Infracredit’s AI Lesson Learnt Bot.",
+            "title": "Hi, I’m LUAN,Infracredit’s AI Bot.",
             "intro": "Ask me things like:",
             "examples": [
                 f"→ Show me all negotiated issues about document type \"{doc_example}\"",
@@ -127,6 +131,7 @@ def intro_message(faq_data):
             ]
         }
     }
+
 
 # ---------------- FASTAPI WRAPPER ---------------- #
 
@@ -163,8 +168,10 @@ def chat_with_bot(request: QueryRequest, token: str = Header(...)):
 
     if contains_fuzzy_command(user_input):
         cleaned_query = clean_fuzzy_query(user_input)
+        print(f" Cleaned fuzzy query: '{cleaned_query}'")
         matches = search_faqs(cleaned_query, faq_data)
     else:
+        print(f" Searching for: '{user_input}'")
         matches = search_faqs(user_input, faq_data)
 
     if matches:
@@ -173,4 +180,3 @@ def chat_with_bot(request: QueryRequest, token: str = Header(...)):
         return {
             "response": "Hmm, I couldn’t find any match for that. Try asking differently, e.g. 'Show me FNI in document type Guarantee Agreement'."
         }
-
