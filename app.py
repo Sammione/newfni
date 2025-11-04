@@ -39,14 +39,31 @@ def fetch_faqs(token: str):
         return None
 
 
+# 🔧 Helper to remove filler tokens that cause overmatching
+def clean_tokens(tokens):
+    """Remove generic filler words that cause false positives"""
+    stop_words = {
+        "about", "on", "for", "of", "the", "a", "an", "me", "show",
+        "list", "display", "find", "fetch", "tell", "give", "can", "you"
+    }
+    return [t for t in tokens if t not in stop_words and len(t) > 1]
+
+
 # Improved fuzzy and partial matching
 def search_faqs(query, faq_data):
     results = []
     if not faq_data or "data" not in faq_data:
         return results
 
-    # Tokenize the query for partial matching
-    query_tokens = query.lower().split()
+    query = query.strip().lower()
+    if not query:
+        return results
+
+    # Tokenize the query and clean filler words
+    query_tokens = clean_tokens(query.split())
+    if not query_tokens:
+        return results
+
     faq_items = faq_data["data"].get("result", [])
 
     for item in faq_items:
@@ -61,6 +78,7 @@ def search_faqs(query, faq_data):
             document_type = fn.get("documentTypeName", doc_type).lower()
             submitted_by = fn.get("submittedByUserName", "Unknown User")
 
+            # Check for any token matches
             if any(token in question or token in clause or token in document_type for token in query_tokens):
                 results.append({
                     "question": fn.get("question"),
@@ -102,8 +120,8 @@ def clean_fuzzy_query(text):
     ]
     for pattern in patterns:
         text = re.sub(pattern, "", text, flags=re.IGNORECASE)
-    # Remove trailing words like "all" if no real keyword follows
-    text = re.sub(r"\ball\b", "", text)
+    # Remove trailing filler words like "about" or "all"
+    text = re.sub(r"\b(all|about|on|for|of|the)\b", "", text)
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -170,6 +188,10 @@ def chat_with_bot(request: QueryRequest, token: str = Header(...)):
     if contains_fuzzy_command(user_input):
         cleaned_query = clean_fuzzy_query(user_input)
         print(f"Detected fuzzy input. Cleaned query → '{cleaned_query}'")
+
+        if not cleaned_query:
+            return {"response": "Please specify what you'd like me to show, e.g. 'Show me FNI for Guarantee Agreement'."}
+
         matches = search_faqs(cleaned_query, faq_data)
     else:
         print(f"Normal keyword search for: '{user_input}'")
