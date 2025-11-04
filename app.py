@@ -16,6 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # ---------------- EXISTING BOT LOGIC ---------------- #
 
 def fetch_faqs(token: str):
@@ -31,7 +32,7 @@ def fetch_faqs(token: str):
             print(f"Loaded {total_fnis} total FNI records across all results.")
             return data
         except Exception as e:
-            print(" Could not parse JSON:", e)
+            print("Could not parse JSON:", e)
             return None
     else:
         print(f"Error fetching FAQs: {response.status_code}, {response.text}")
@@ -82,28 +83,27 @@ def is_greeting(text):
     return any(word in text for word in greetings)
 
 
-#  Detect fuzzy-style queries
+# Detect fuzzy-style queries
 def contains_fuzzy_command(text):
     fuzzy_keywords = [
-        "show", "show me", "show me all", "display", "find", "fetch", "list", "list all",
-        "search", "search for", "view", "tell me", "tell me about", "give me", "can you show",
-        "fni", "issue", "issues", "negotiated issue", "negotiated issues", "negotiated",
-        "about", "on", "in", "for", "the", "on the", "Give me FNI for",
-        "clause", "clauses", "clause title", "document", "document type", "client"
+        "show", "show me", "display", "find", "fetch", "list",
+        "search", "search for", "view", "tell me", "tell me about",
+        "give me", "can you show", "show me fni for", "give me fni for"
     ]
-    text = text.lower()
-    return any(keyword in text for keyword in fuzzy_keywords)
+    text = text.lower().strip()
+    return any(text.startswith(keyword) for keyword in fuzzy_keywords)
 
 
-# Improved fuzzy cleaner (only removes leading commands)
+# Clean fuzzy prefixes
 def clean_fuzzy_query(text):
     text = text.lower()
     patterns = [
-        r"^(show|show me|Give me FNI for|list|list all|display|find|fetch|tell me|tell me about|give me|search|search for|can you show)\s+"
+        r"^(show|show me|show me fni for|give me fni for|give me|list|display|find|fetch|tell me|tell me about|search|search for|can you show)\s+"
     ]
     for pattern in patterns:
         text = re.sub(pattern, "", text, flags=re.IGNORECASE)
-    # Remove extra spaces
+    # Remove trailing words like "all" if no real keyword follows
+    text = re.sub(r"\ball\b", "", text)
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -122,7 +122,7 @@ def intro_message(faq_data):
             "title": "Hi, I’m LUAN, Infracredit’s AI Bot.",
             "intro": "Ask me things like:",
             "examples": [
-                f"→ Show me all negotiated issues about document type \"{doc_example}\"",
+                f"→ Show me negotiated issues about document type \"{doc_example}\"",
                 f"→ Tell me about FNI for clause \"{clause_example}\"",
                 f"→ List issues in client type \"{client_example}\"",
                 f"→ What are the negotiated issues on \"{doc_example}\"?",
@@ -162,15 +162,17 @@ def chat_with_bot(request: QueryRequest, token: str = Header(...)):
 
     user_input = request.query.strip()
 
+    # Check for greetings
     if is_greeting(user_input):
         return intro_message(faq_data)
 
+    # Fuzzy prefix (e.g. "show me", "find", etc.)
     if contains_fuzzy_command(user_input):
         cleaned_query = clean_fuzzy_query(user_input)
-        print(f"Cleaned fuzzy query: '{cleaned_query}'")
+        print(f"Detected fuzzy input. Cleaned query → '{cleaned_query}'")
         matches = search_faqs(cleaned_query, faq_data)
     else:
-        print(f"Searching for: '{user_input}'")
+        print(f"Normal keyword search for: '{user_input}'")
         matches = search_faqs(user_input, faq_data)
 
     if matches:
