@@ -3,8 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import requests
 import re
-from difflib import SequenceMatcher
-from config import BASE_URL, FAQ_ENDPOINT, get_auth_headers
+from config import BASE_URL, FAQ_ENDPOINT, get_auth_headers  
 
 app = FastAPI(title="LUAN – Infracredit AI Bot")
 
@@ -32,22 +31,21 @@ def fetch_faqs(token: str):
             print(f"Loaded {total_fnis} total FNI records across all results.")
             return data
         except Exception as e:
-            print("Could not parse JSON:", e)
+            print(" Could not parse JSON:", e)
             return None
     else:
         print(f"Error fetching FAQs: {response.status_code}, {response.text}")
         return None
 
 
-# Improved search function (bug fix applied)
+# Improved fuzzy and partial matching
 def search_faqs(query, faq_data):
     results = []
     if not faq_data or "data" not in faq_data:
         return results
 
-    # Tokenize and clean the query
-    stopwords = {"in", "on", "for", "the", "a", "an", "of", "to", "me", "show", "give", "about", "type", "document"}
-    query_tokens = [t for t in query.lower().split() if t not in stopwords]
+    # Tokenize the query for partial matching
+    query_tokens = query.lower().split()
     faq_items = faq_data["data"].get("result", [])
 
     for item in faq_items:
@@ -57,34 +55,19 @@ def search_faqs(query, faq_data):
 
         for fn in fnis:
             question = fn.get("question", "").lower()
-            answer = fn.get("response", "")
+            response = fn.get("response", "")
             clause = fn.get("clauseName", clause_name).lower()
             document_type = fn.get("documentTypeName", doc_type).lower()
             submitted_by = fn.get("submittedByUserName", "Unknown User")
 
-            # Combine searchable text fields
-            combined_text = f"{question} {clause} {document_type}"
-
-            # Require that ALL query tokens appear (stronger filter)
-            if all(token in combined_text for token in query_tokens):
+            if any(token in question or token in clause or token in document_type for token in query_tokens):
                 results.append({
                     "question": fn.get("question"),
-                    "answer": answer,
+                    "answer": response,
                     "clause": clause,
                     "documentType": document_type,
                     "submittedBy": submitted_by
                 })
-            else:
-                # Fuzzy fallback: check partial similarity
-                ratio = SequenceMatcher(None, query.lower(), combined_text).ratio()
-                if ratio > 0.75:
-                    results.append({
-                        "question": fn.get("question"),
-                        "answer": answer,
-                        "clause": clause,
-                        "documentType": document_type,
-                        "submittedBy": submitted_by
-                    })
 
     return results
 
@@ -184,7 +167,7 @@ def chat_with_bot(request: QueryRequest, token: str = Header(...)):
 
     if contains_fuzzy_command(user_input):
         cleaned_query = clean_fuzzy_query(user_input)
-        print(f" Cleaned fuzzy query: '{cleaned_query}'")
+        print(f"Cleaned fuzzy query: '{cleaned_query}'")
         matches = search_faqs(cleaned_query, faq_data)
     else:
         print(f"Searching for: '{user_input}'")
