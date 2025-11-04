@@ -143,7 +143,6 @@ def intro_message(faq_data):
                 f"→ Show me negotiated issues about document type \"{doc_example}\"",
                 f"→ Tell me about FNI for clause \"{clause_example}\"",
                 f"→ List issues in client type \"{client_example}\"",
-                f"→ What are the negotiated issues on \"{doc_example}\"?",
                 f"→ Give me FNI for \"{clause_example}\""
             ]
         }
@@ -203,4 +202,5 @@ def chat_with_bot(request: QueryRequest, token: str = Header(...)):
         return {
             "response": "Hmm, I couldn’t find any match for that. Try asking differently, e.g. 'Show me FNI in document type Guarantee Agreement'."
         }
+
 
