@@ -116,7 +116,7 @@ def contains_fuzzy_command(text):
 def clean_fuzzy_query(text):
     text = text.lower()
     patterns = [
-        r"^(show|show me|show me fni for|give me fni for|give me|list|display|find|fetch|tell me|tell me about|search|search for|can you show)\s+"
+        r"^(show|What are the negotiated issues on|Show me negotiated issues about|show me|show me fni for|give me fni for|List issues in|give me|list|display|find|fetch|tell me|tell me about|search|search for|can you show)\s+"
     ]
     for pattern in patterns:
         text = re.sub(pattern, "", text, flags=re.IGNORECASE)
@@ -203,3 +203,4 @@ def chat_with_bot(request: QueryRequest, token: str = Header(...)):
         return {
             "response": "Hmm, I couldn’t find any match for that. Try asking differently, e.g. 'Show me FNI in document type Guarantee Agreement'."
         }
+
