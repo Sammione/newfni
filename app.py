@@ -44,12 +44,13 @@ def clean_tokens(tokens):
     """Remove generic filler words that cause false positives"""
     stop_words = {
         "about", "on", "for", "of", "the", "a", "an", "me", "show",
-        "list", "display", "find", "fetch", "tell", "give", "can", "you"
+        "list", "display", "find", "fetch", "tell", "give", "can", "you",
+        "issues", "negotiated", "type", "document", "clause", "client"
     }
     return [t for t in tokens if t not in stop_words and len(t) > 1]
 
 
-# Improved fuzzy and partial matching
+# ✅ Improved precise matching logic
 def search_faqs(query, faq_data):
     results = []
     if not faq_data or "data" not in faq_data:
@@ -78,8 +79,10 @@ def search_faqs(query, faq_data):
             document_type = fn.get("documentTypeName", doc_type).lower()
             submitted_by = fn.get("submittedByUserName", "Unknown User")
 
-            # Check for any token matches
-            if any(token in question or token in clause or token in document_type for token in query_tokens):
+            combined_text = f"{question} {clause} {document_type}"
+
+            # ✅ Require *all tokens* to appear, not just one
+            if all(token in combined_text for token in query_tokens):
                 results.append({
                     "question": fn.get("question"),
                     "answer": response,
@@ -112,16 +115,23 @@ def contains_fuzzy_command(text):
     return any(text.startswith(keyword) for keyword in fuzzy_keywords)
 
 
-# Clean fuzzy prefixes
+# ✅ Clean fuzzy prefixes & filler words
 def clean_fuzzy_query(text):
-    text = text.lower()
+    """Clean natural language query prefixes and filler words"""
+    text = text.lower().strip()
+
+    # Remove leading fuzzy prefixes
     patterns = [
-        r"^(show|What are the negotiated issues on|Show me negotiated issues about|show me|show me fni for|give me fni for|List issues in|give me|list|display|find|fetch|tell me|tell me about|search|search for|can you show)\s+"
+        r"^(show|show me|give me|tell me|list|display|find|fetch|search|search for|view|can you show|what are|what is|tell me about)\s+"
     ]
     for pattern in patterns:
         text = re.sub(pattern, "", text, flags=re.IGNORECASE)
-    # Remove trailing filler words like "about" or "all"
-    text = re.sub(r"\b(all|about|on|for|of|the)\b", "", text)
+
+    # Remove filler words that dilute search precision
+    fillers = r"\b(about|type|document|clause|client|issues|negotiated|on|for|of|the|a|an|me|show|list|display|find|fetch|tell|give|can|you|fni)\b"
+    text = re.sub(fillers, "", text, flags=re.IGNORECASE)
+
+    # Clean extra spaces
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -183,7 +193,7 @@ def chat_with_bot(request: QueryRequest, token: str = Header(...)):
     if is_greeting(user_input):
         return intro_message(faq_data)
 
-    # Fuzzy prefix (e.g. "show me", "find", etc.)
+    # Handle fuzzy queries like "show me", "give me"
     if contains_fuzzy_command(user_input):
         cleaned_query = clean_fuzzy_query(user_input)
         print(f"Detected fuzzy input. Cleaned query → '{cleaned_query}'")
@@ -202,5 +212,3 @@ def chat_with_bot(request: QueryRequest, token: str = Header(...)):
         return {
             "response": "Hmm, I couldn’t find any match for that. Try asking differently, e.g. 'Show me FNI in document type Guarantee Agreement'."
         }
-
-
